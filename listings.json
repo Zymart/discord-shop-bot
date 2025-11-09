@@ -1,0 +1,46 @@
+{
+    "sell": [
+        {
+            "name": "asdasdasda",
+            "price": "asdasdasdas",
+            "stock": "dasdas",
+            "seller_id": "730629579533844512",
+            "seller_name": "black_jack322",
+            "image": "https://cdn.discordapp.com/attachments/1381259060090765422/1436715613148938302/avbroly.webp?ex=69109d2f&is=690f4baf&hm=8c5e08682c2736bbd386e25f758728646b15adc735518f27e0e26704107fc0f1"
+        },
+        {
+            "name": "asdasd",
+            "price": "asdasdadas",
+            "stock": "dadsda",
+            "seller_id": "730629579533844512",
+            "seller_name": "black_jack322",
+            "image": "https://cdn.discordapp.com/attachments/1381259060090765422/1436716113936515073/av_dio.webp?ex=69109da6&is=690f4c26&hm=74b0df00cc77019bf7dd042b1f4ff6452c11b7b604debd8367ed6e12c6d4a2a1"
+        },
+        {
+            "name": "asdsdsdf",
+            "price": "sdf",
+            "stock": "dsfsdfsdfs",
+            "seller_id": "730629579533844512",
+            "seller_name": "black_jack322",
+            "image": "https://cdn.discordapp.com/attachments/1381259060090765422/1436716886816587846/is-the-soul-society-in-bleach-based-on-a-real-location-v0-0dlzeb90da4b1.jpg?ex=69109e5e&is=690f4cde&hm=dd354db6a90990d04e8da0e75f84ed958fb2bb4c0e345fe94c30b3c152ba35af"
+        },
+        {
+            "name": "dasdasdas",
+            "price": "dasdasdsa",
+            "stock": "dasdasds",
+            "seller_id": "730629579533844512",
+            "seller_name": "black_jack322",
+            "image": "adasdasdasd"
+        },
+        {
+            "name": "dasdasdas",
+            "price": "dasdasdsa",
+            "stock": "dasdasds",
+            "seller_id": "730629579533844512",
+            "seller_name": "black_jack322",
+            "image": null
+        }
+    ],
+    "trade_looking": [],
+    "trade_offering": []
+}

@@ -1,0 +1,259 @@
+import discord
+from discord.ext import commands
+from discord import app_commands
+import json
+import os
+
+# Bot setup
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix='!', intents=intents)
+
+# Data storage
+LISTINGS_FILE = 'listings.json'
+
+def load_data():
+    if os.path.exists(LISTINGS_FILE):
+        with open(LISTINGS_FILE, 'r') as f:
+            return json.load(f)
+    return {'sell': [], 'trade_looking': [], 'trade_offering': []}
+
+def save_data(data):
+    with open(LISTINGS_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
+# Main Shop Panel View
+class ShopView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+    
+    @discord.ui.button(label='Buy', style=discord.ButtonStyle.green, custom_id='buy_button')
+    async def buy_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        data = load_data()
+        
+        if not data['sell']:
+            await interaction.response.send_message("No items available for sale yet!", ephemeral=True)
+            return
+        
+        # Create embed showing available items
+        embed = discord.Embed(title="Items for Sale", color=discord.Color.blue())
+        for idx, item in enumerate(data['sell'], 1):
+            embed.add_field(
+                name=f"{idx}. {item['name']}",
+                value=f"**Price:** {item['price']}\n**Stock:** {item['stock']}\n**Seller:** <@{item['seller_id']}>",
+                inline=False
+            )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @discord.ui.button(label='Trade', style=discord.ButtonStyle.blurple, custom_id='trade_button')
+    async def trade_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        view = TradeOptionView()
+        await interaction.response.send_message("Choose a trade option:", view=view, ephemeral=True)
+    
+    @discord.ui.button(label='Sell', style=discord.ButtonStyle.red, custom_id='sell_button')
+    async def sell_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = SellModal()
+        await interaction.response.send_modal(modal)
+
+# Trade Options View
+class TradeOptionView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=180)
+    
+    @discord.ui.button(label='Look For', style=discord.ButtonStyle.green)
+    async def look_for_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        data = load_data()
+        
+        if not data['trade_looking']:
+            await interaction.response.send_message("No one is looking for items yet!", ephemeral=True)
+            return
+        
+        # Show what players are looking for
+        embed = discord.Embed(title="Players Looking For Items", color=discord.Color.gold())
+        for idx, item in enumerate(data['trade_looking'], 1):
+            embed.add_field(
+                name=f"{idx}. {item['item_name']}",
+                value=f"**Offering:** {item['offering']}\n**Player:** <@{item['user_id']}>",
+                inline=False
+            )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @discord.ui.button(label='Trading For', style=discord.ButtonStyle.blurple)
+    async def trading_for_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = TradingForModal()
+        await interaction.response.send_modal(modal)
+
+# Sell Modal
+class SellModal(discord.ui.Modal, title='List Item for Sale'):
+    item_name = discord.ui.TextInput(
+        label='Name of Item',
+        placeholder='Enter item name...',
+        required=True
+    )
+    
+    price = discord.ui.TextInput(
+        label='Price',
+        placeholder='Enter price (e.g., 1000 coins)...',
+        required=True
+    )
+    
+    stock = discord.ui.TextInput(
+        label='Stock',
+        placeholder='Enter quantity available...',
+        required=True
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        data = load_data()
+        
+        listing = {
+            'name': self.item_name.value,
+            'price': self.price.value,
+            'stock': self.stock.value,
+            'seller_id': interaction.user.id,
+            'seller_name': interaction.user.name
+        }
+        
+        data['sell'].append(listing)
+        save_data(data)
+        
+        embed = discord.Embed(title="✅ Item Listed for Sale!", color=discord.Color.green())
+        embed.add_field(name="Item", value=self.item_name.value, inline=False)
+        embed.add_field(name="Price", value=self.price.value, inline=True)
+        embed.add_field(name="Stock", value=self.stock.value, inline=True)
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# Trading For Modal (I have X, want Y)
+class TradingForModal(discord.ui.Modal, title='List Item for Trade'):
+    item_name = discord.ui.TextInput(
+        label='Name of the Item (What you have)',
+        placeholder='Enter the item you want to trade...',
+        required=True
+    )
+    
+    want = discord.ui.TextInput(
+        label='What do you want for it?',
+        placeholder='Enter what you want in exchange...',
+        required=True,
+        style=discord.TextStyle.paragraph
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        data = load_data()
+        
+        listing = {
+            'item_name': self.item_name.value,
+            'want': self.want.value,
+            'user_id': interaction.user.id,
+            'user_name': interaction.user.name
+        }
+        
+        data['trade_offering'].append(listing)
+        save_data(data)
+        
+        embed = discord.Embed(title="✅ Trade Listing Created!", color=discord.Color.blue())
+        embed.add_field(name="Trading", value=self.item_name.value, inline=False)
+        embed.add_field(name="Looking For", value=self.want.value, inline=False)
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# Look For Modal (I want X, offering Y)
+class LookForModal(discord.ui.Modal, title='Looking For Item'):
+    item_name = discord.ui.TextInput(
+        label='What item are you looking for?',
+        placeholder='Enter item name...',
+        required=True
+    )
+    
+    offering = discord.ui.TextInput(
+        label='What are you offering?',
+        placeholder='Enter what you can offer in exchange...',
+        required=True,
+        style=discord.TextStyle.paragraph
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        data = load_data()
+        
+        listing = {
+            'item_name': self.item_name.value,
+            'offering': self.offering.value,
+            'user_id': interaction.user.id,
+            'user_name': interaction.user.name
+        }
+        
+        data['trade_looking'].append(listing)
+        save_data(data)
+        
+        embed = discord.Embed(title="✅ Looking For Listing Created!", color=discord.Color.purple())
+        embed.add_field(name="Looking For", value=self.item_name.value, inline=False)
+        embed.add_field(name="Offering", value=self.offering.value, inline=False)
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+# Actually add button to Look For option
+class TradeOptionView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=180)
+    
+    @discord.ui.button(label='Look For', style=discord.ButtonStyle.green)
+    async def look_for_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = LookForModal()
+        await interaction.response.send_modal(modal)
+    
+    @discord.ui.button(label='Trading For', style=discord.ButtonStyle.blurple)
+    async def trading_for_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = TradingForModal()
+        await interaction.response.send_modal(modal)
+
+@bot.event
+async def on_ready():
+    print(f'{bot.user} is now online!')
+    print(f'Bot ID: {bot.user.id}')
+
+@bot.command()
+async def shop(ctx):
+    """Opens the shop panel"""
+    embed = discord.Embed(
+        title="🏪 Shop & Trade System",
+        description="Choose an option below:",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="🟢 Buy", value="Browse items for sale", inline=False)
+    embed.add_field(name="🔵 Trade", value="Trade items with other players", inline=False)
+    embed.add_field(name="🔴 Sell", value="List your items for sale", inline=False)
+    
+    view = ShopView()
+    await ctx.send(embed=embed, view=view)
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def clearshop(ctx):
+    """Clear all listings (Admin only)"""
+    data = {'sell': [], 'trade_looking': [], 'trade_offering': []}
+    save_data(data)
+    await ctx.send("✅ All shop listings have been cleared!")
+
+@bot.command()
+async def viewtrades(ctx):
+    """View all active trade offers"""
+    data = load_data()
+    
+    embed = discord.Embed(title="📋 Active Trade Offers", color=discord.Color.gold())
+    
+    if data['trade_offering']:
+        offering_text = ""
+        for idx, item in enumerate(data['trade_offering'], 1):
+            offering_text += f"{idx}. **{item['item_name']}** → wants: {item['want']} (<@{item['user_id']}>)\n"
+        embed.add_field(name="🔄 Trading For", value=offering_text, inline=False)
+    
+    if not data['trade_offering']:
+        embed.description = "No active trades yet!"
+    
+    await ctx.send(embed=embed)
+
+# Replace 'YOUR_BOT_TOKEN' with your actual bot token
+bot.run('YOUR_BOT_TOKEN')
