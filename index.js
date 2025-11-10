@@ -12,14 +12,14 @@ const client = new Client({
 
 const OWNER_ID = '730629579533844512';
 
-// JSONBin Configuration - Add your API key and Bin IDs in Replit Secrets
+// JSONBin Configuration
 const JSONBIN_API_KEY = process.env.JSONBIN_API_KEY || '';
 const JSONBIN_BIN_ID = process.env.JSONBIN_BIN_ID || '';
 const CONFIG_BIN_ID = process.env.CONFIG_BIN_ID || '';
 
 // Store pagination data and ticket trackers
 const paginationData = new Map();
-const ticketTimers = new Map(); // Track last message time in tickets
+const ticketTimers = new Map();
 
 // JSONBin API functions
 async function loadFromJSONBin(binId) {
@@ -61,24 +61,20 @@ async function saveToJSONBin(binId, data) {
     }
 }
 
-// Load data (try JSONBin first, fallback to local)
+// Load data
 async function loadData() {
     const cloudData = await loadFromJSONBin(JSONBIN_BIN_ID);
     if (cloudData) return cloudData;
 
-    // Fallback to local file
     if (fs.existsSync('./listings.json')) {
         return JSON.parse(fs.readFileSync('./listings.json', 'utf8'));
     }
     return { sell: [], trade_looking: [], trade_offering: [] };
 }
 
-// Save data (save to both JSONBin and local)
+// Save data
 async function saveData(data) {
-    // Save to JSONBin
     await saveToJSONBin(JSONBIN_BIN_ID, data);
-
-    // Also save locally as backup
     fs.writeFileSync('./listings.json', JSON.stringify(data, null, 4));
 }
 
@@ -87,7 +83,6 @@ async function loadConfig() {
     const cloudConfig = await loadFromJSONBin(CONFIG_BIN_ID);
     if (cloudConfig) return cloudConfig;
 
-    // Fallback to local file
     if (fs.existsSync('./config.json')) {
         return JSON.parse(fs.readFileSync('./config.json', 'utf8'));
     }
@@ -96,22 +91,19 @@ async function loadConfig() {
 
 // Save config
 async function saveConfig(config) {
-    // Save to JSONBin
     await saveToJSONBin(CONFIG_BIN_ID, config);
-
-    // Also save locally as backup
     fs.writeFileSync('./config.json', JSON.stringify(config, null, 4));
 }
 
-// Check if user is admin (server admin or bot admin)
-function isAdmin(member) {
-    const config = loadConfig();
+// Check if user is admin
+async function isAdmin(member) {
+    const config = await loadConfig();
     return member.permissions.has(PermissionFlagsBits.Administrator) || 
            config.admins?.includes(member.id) || 
            member.id === OWNER_ID;
 }
 
-// Validate if string is a valid URL
+// Validate URL
 function isValidUrl(string) {
     if (!string) return false;
     try {
@@ -122,9 +114,8 @@ function isValidUrl(string) {
     }
 }
 
-// Function to show buy page with pagination
+// Show buy page
 async function showBuyPage(interaction, data, page, isUpdate) {
-    const ITEMS_PER_PAGE = 1;
     const totalPages = data.sell.length;
     const item = data.sell[page];
 
@@ -193,9 +184,8 @@ async function showBuyPage(interaction, data, page, isUpdate) {
     }
 }
 
-// Function to show trade offers page with pagination
+// Show trade offers page
 async function showTradeOffersPage(interaction, data, page, isUpdate) {
-    const ITEMS_PER_PAGE = 1;
     const totalPages = data.trade_offering.length;
     const item = data.trade_offering[page];
 
@@ -264,25 +254,23 @@ async function showTradeOffersPage(interaction, data, page, isUpdate) {
     }
 }
 
-// Start ticket reminder timer (24 hours)
+// Start ticket reminder
 function startTicketReminder(channelId, buyerId, sellerId) {
     const timer = setTimeout(async () => {
         try {
             const channel = await client.channels.fetch(channelId);
             await channel.send(`📢 Reminder: <@${buyerId}> <@${sellerId}> - Don't forget to complete your transaction!`);
-
-            // Restart timer for another 24 hours
             startTicketReminder(channelId, buyerId, sellerId);
         } catch (error) {
             console.error('Error sending ticket reminder:', error);
             ticketTimers.delete(channelId);
         }
-    }, 24 * 60 * 60 * 1000); // 24 hours
+    }, 24 * 60 * 60 * 1000);
 
     ticketTimers.set(channelId, { timer, buyerId, sellerId });
 }
 
-// Reset ticket timer when someone sends a message
+// Reset ticket timer
 function resetTicketTimer(channelId) {
     const timerData = ticketTimers.get(channelId);
     if (timerData) {
@@ -296,18 +284,15 @@ client.on('ready', () => {
     console.log('JSONBin Status:', JSONBIN_API_KEY ? '✅ Configured' : '❌ Not configured (using local storage)');
 });
 
-// Track messages in ticket channels to reset timer
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    // Check if message is in a ticket channel and reset timer
     if (message.channel.name.startsWith('ticket-') || message.channel.name.startsWith('trade-')) {
         resetTicketTimer(message.channel.id);
     }
 
-    // !shop command (Admin only)
     if (message.content === '!shop') {
-        if (!isAdmin(message.member)) {
+        if (!(await isAdmin(message.member))) {
             return message.reply('❌ You need administrator permissions to use this command!');
         }
 
@@ -356,9 +341,8 @@ client.on('messageCreate', async (message) => {
         await message.channel.send({ embeds: [embed], components: [row1, row2] });
     }
 
-    // !clearshop command (Admin only)
     if (message.content === '!clearshop') {
-        if (!isAdmin(message.member)) {
+        if (!(await isAdmin(message.member))) {
             return message.reply('❌ You need administrator permissions to use this command!');
         }
 
@@ -367,7 +351,6 @@ client.on('messageCreate', async (message) => {
         await message.reply('✅ All shop listings have been cleared!');
     }
 
-    // !viewtrades command
     if (message.content === '!viewtrades') {
         const data = await loadData();
         const embed = new EmbedBuilder()
@@ -387,9 +370,8 @@ client.on('messageCreate', async (message) => {
         await message.channel.send({ embeds: [embed] });
     }
 
-    // !setchannel command (Admin only)
     if (message.content.startsWith('!setchannel')) {
-        if (!isAdmin(message.member)) {
+        if (!(await isAdmin(message.member))) {
             return message.reply('❌ You need administrator permissions to use this command!');
         }
 
@@ -400,9 +382,8 @@ client.on('messageCreate', async (message) => {
         await message.reply('✅ This channel will now receive shop and trade announcements!');
     }
 
-    // !setshop command (Admin only)
     if (message.content.startsWith('!setshop')) {
-        if (!isAdmin(message.member)) {
+        if (!(await isAdmin(message.member))) {
             return message.reply('❌ You need administrator permissions to use this command!');
         }
 
@@ -429,7 +410,6 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // !addadm command (Owner only)
     if (message.content.startsWith('!addadm')) {
         if (message.author.id !== OWNER_ID) {
             return message.reply('❌ Only the bot owner can use this command!');
@@ -454,7 +434,6 @@ client.on('messageCreate', async (message) => {
         await message.reply(`✅ <@${userId}> is now a bot admin! They can now use admin commands.`);
     }
 
-    // !remadm command (Owner only)
     if (message.content.startsWith('!remadm')) {
         if (message.author.id !== OWNER_ID) {
             return message.reply('❌ Only the bot owner can use this command!');
@@ -479,7 +458,6 @@ client.on('messageCreate', async (message) => {
         await message.reply(`✅ <@${userId}> is no longer a bot admin.`);
     }
 
-    // !listadm command (Owner only)
     if (message.content.startsWith('!listadm')) {
         if (message.author.id !== OWNER_ID) {
             return message.reply('❌ Only the bot owner can use this command!');
@@ -500,34 +478,28 @@ client.on('messageCreate', async (message) => {
         await message.reply({ embeds: [embed] });
     }
 
-    // !removelisting command
     if (message.content.startsWith('!removelisting')) {
         return message.reply('💡 Please use the **Remove Listing** button in `!shop` instead!');
     }
 });
 
-// Button interactions
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
     const data = await loadData();
 
-    // BUY BUTTON
     if (interaction.customId === 'buy') {
         if (data.sell.length === 0) {
             return interaction.reply({ content: 'No items available for sale yet!', ephemeral: true });
         }
-
         await showBuyPage(interaction, data, 0, false);
     }
 
-    // BUY PAGINATION
     if (interaction.customId.startsWith('buy_page_')) {
         const page = parseInt(interaction.customId.split('_')[2]);
         await showBuyPage(interaction, data, page, true);
     }
 
-    // TRADE BUTTON
     if (interaction.customId === 'trade') {
         const row = new ActionRowBuilder()
             .addComponents(
@@ -544,7 +516,6 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ content: 'Choose a trade option:', components: [row], ephemeral: true });
     }
 
-    // SELL BUTTON
     if (interaction.customId === 'sell') {
         const modal = new ModalBuilder()
             .setCustomId('sell_modal')
@@ -588,22 +559,18 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.showModal(modal);
     }
 
-    // LOOK FOR BUTTON
     if (interaction.customId === 'look_for') {
         if (data.trade_offering.length === 0) {
             return interaction.reply({ content: 'No trade offers available yet!', ephemeral: true });
         }
-
         await showTradeOffersPage(interaction, data, 0, false);
     }
 
-    // TRADE OFFERS PAGINATION
     if (interaction.customId.startsWith('trade_page_')) {
         const page = parseInt(interaction.customId.split('_')[2]);
         await showTradeOffersPage(interaction, data, page, true);
     }
 
-    // TRADING FOR BUTTON
     if (interaction.customId === 'trading_for') {
         const modal = new ModalBuilder()
             .setCustomId('trading_for_modal')
@@ -639,7 +606,6 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.showModal(modal);
     }
 
-    // MAKE OFFER BUTTONS
     if (interaction.customId.startsWith('make_offer_')) {
         const itemIndex = parseInt(interaction.customId.split('_')[2]);
         const tradeOffer = data.trade_offering[itemIndex];
@@ -666,7 +632,6 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.showModal(modal);
     }
 
-    // CONTACT SELLER BUTTONS
     if (interaction.customId.startsWith('contact_seller_')) {
         const itemIndex = parseInt(interaction.customId.split('_')[2]);
         const item = data.sell[itemIndex];
@@ -736,7 +701,6 @@ client.on('interactionCreate', async (interaction) => {
                 components: [closeButton] 
             });
 
-            // Start 24-hour reminder timer
             startTicketReminder(ticketChannel.id, interaction.user.id, item.seller_id);
 
             await interaction.reply({ 
@@ -753,11 +717,9 @@ client.on('interactionCreate', async (interaction) => {
         }
     }
 
-    // CLOSE TICKET BUTTON
     if (interaction.customId === 'close_ticket') {
         const channel = interaction.channel;
 
-        // Clear the reminder timer
         const timerData = ticketTimers.get(channel.id);
         if (timerData) {
             clearTimeout(timerData.timer);
@@ -775,7 +737,6 @@ client.on('interactionCreate', async (interaction) => {
         }, 5000);
     }
 
-    // ACCEPT TRADE BUTTON
     if (interaction.customId.startsWith('accept_trade_')) {
         const offererId = interaction.customId.split('_')[2];
 
@@ -807,7 +768,6 @@ client.on('interactionCreate', async (interaction) => {
 
             await interaction.channel.send({ embeds: [tradeEmbed], components: [closeButton] });
 
-            // Start 24-hour reminder timer for trade channel
             startTicketReminder(interaction.channel.id, offererId, interaction.user.id);
 
         } catch (error) {
@@ -815,7 +775,6 @@ client.on('interactionCreate', async (interaction) => {
         }
     }
 
-    // DECLINE TRADE BUTTON
     if (interaction.customId.startsWith('decline_trade_')) {
         await interaction.update({ 
             content: `❌ Trade declined. This channel will close in 10 seconds.`,
@@ -831,11 +790,9 @@ client.on('interactionCreate', async (interaction) => {
         }, 10000);
     }
 
-    // CLOSE TRADE CHANNEL BUTTON
     if (interaction.customId === 'close_trade_channel') {
         const channel = interaction.channel;
 
-        // Clear the reminder timer
         const timerData = ticketTimers.get(channel.id);
         if (timerData) {
             clearTimeout(timerData.timer);
@@ -853,10 +810,9 @@ client.on('interactionCreate', async (interaction) => {
         }, 5000);
     }
 
-    // REMOVE LISTING BUTTONS
     if (interaction.customId.startsWith('remove_listing_') || interaction.customId === 'admin_remove_menu') {
         if (interaction.customId === 'admin_remove_menu') {
-            if (!isAdmin(interaction.member)) {
+            if (!(await isAdmin(interaction.member))) {
                 return interaction.reply({ content: '❌ Only admins can use this feature!', ephemeral: true });
             }
 
@@ -1003,9 +959,8 @@ client.on('interactionCreate', async (interaction) => {
         }
     }
 
-    // ADMIN REMOVE ITEM BUTTONS
     if (interaction.customId.startsWith('admin_remove_item_')) {
-        if (!isAdmin(interaction.member)) {
+        if (!(await isAdmin(interaction.member))) {
             return interaction.reply({ content: '❌ Only admins can use this feature!', ephemeral: true });
         }
 
@@ -1045,7 +1000,6 @@ client.on('interactionCreate', async (interaction) => {
         }
     }
 
-    // MODAL SUBMISSIONS
     if (interaction.isModalSubmit()) {
         if (interaction.customId.startsWith('offer_modal_')) {
             const itemIndex = parseInt(interaction.customId.split('_')[2]);
@@ -1148,7 +1102,6 @@ client.on('interactionCreate', async (interaction) => {
             const stock = interaction.fields.getTextInputValue('stock');
             let imageUrl = interaction.fields.getTextInputValue('image_url') || null;
 
-            // Validate image URL
             if (imageUrl && !isValidUrl(imageUrl)) {
                 return interaction.reply({ 
                     content: '❌ Invalid image URL! Please provide a valid URL or leave it empty.\n\nTip: Upload image to Discord, right-click, and select "Copy Link"', 
@@ -1197,31 +1150,10 @@ client.on('interactionCreate', async (interaction) => {
                             { name: '📦 Stock', value: stock, inline: true },
                             { name: '👤 Seller', value: `<@${interaction.user.id}>`, inline: true }
                         )
+                        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 256 }))
                         .setTimestamp();
 
                     if (imageUrl && isValidUrl(imageUrl)) {
-                        announceEmbed.setImage(imageUrl);
-                    }
-
-                    const itemIndex = data.sell.length - 1;
-                    const buyButton = new ActionRowBuilder()
-                        .addComponents(
-                            new ButtonBuilder()
-                                .setCustomId(`contact_seller_${itemIndex}`)
-                                .setLabel('Contact Seller')
-                                .setStyle(ButtonStyle.Success)
-                                .setEmoji('📞')
-                        );
-
-                    await announcementChannel.send({ embeds: [announceEmbed], components: [buyButton] });
-                } catch (error) {
-                    console.error('Error posting announcement:', error);
-                }
-            }
-        })
-                        .setTimestamp();
-
-                    if (imageUrl) {
                         announceEmbed.setImage(imageUrl);
                     }
 
@@ -1245,7 +1177,14 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.customId === 'trading_for_modal') {
             const itemName = interaction.fields.getTextInputValue('item_name');
             const want = interaction.fields.getTextInputValue('want');
-            const imageUrl = interaction.fields.getTextInputValue('image_url') || null;
+            let imageUrl = interaction.fields.getTextInputValue('image_url') || null;
+
+            if (imageUrl && !isValidUrl(imageUrl)) {
+                return interaction.reply({ 
+                    content: '❌ Invalid image URL! Please provide a valid URL or leave it empty.\n\nTip: Upload image to Discord, right-click, and select "Copy Link"', 
+                    ephemeral: true 
+                });
+            }
 
             const listing = {
                 item_name: itemName,
@@ -1266,7 +1205,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: 'Looking For', value: want, inline: false }
                 );
 
-            if (imageUrl) {
+            if (imageUrl && isValidUrl(imageUrl)) {
                 embed.setImage(imageUrl);
             }
 
@@ -1286,9 +1225,10 @@ client.on('interactionCreate', async (interaction) => {
                             { name: '💭 Looking For', value: want, inline: false },
                             { name: '👤 Trader', value: `<@${interaction.user.id}>`, inline: false }
                         )
+                        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 256 }))
                         .setTimestamp();
 
-                    if (imageUrl) {
+                    if (imageUrl && isValidUrl(imageUrl)) {
                         announceEmbed.setImage(imageUrl);
                     }
 
@@ -1311,7 +1251,6 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-// Get token from Replit secrets
 const token = process.env.YOUR_BOT_TOKEN;
 
 if (!token) {
