@@ -510,7 +510,20 @@ client.on('messageCreate', async (message) => {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton() && !interaction.isModalSubmit()) return;
 
-    const data = await loadData();
+    let data;
+    try {
+        data = await loadData();
+        // Ensure data structure exists
+        if (!data) {
+            data = { sell: [], trade_looking: [], trade_offering: [] };
+        }
+        if (!data.sell) data.sell = [];
+        if (!data.trade_offering) data.trade_offering = [];
+        if (!data.trade_looking) data.trade_looking = [];
+    } catch (error) {
+        console.error('Error loading data:', error);
+        data = { sell: [], trade_looking: [], trade_offering: [] };
+    }
 
     if (interaction.customId === 'buy') {
         if (data.sell.length === 0) {
@@ -1142,59 +1155,72 @@ client.on('interactionCreate', async (interaction) => {
                 image: imageUrl
             };
 
-            data.sell.push(listing);
-            await saveData(data);
-
-            const embed = new EmbedBuilder()
-                .setTitle('✅ Item Listed for Sale!')
-                .setColor(0x00FF00)
-                .addFields(
-                    { name: 'Item', value: itemName, inline: false },
-                    { name: 'Price', value: price, inline: true },
-                    { name: 'Stock', value: stock, inline: true }
-                );
-
-            if (imageUrl && isValidUrl(imageUrl)) {
-                embed.setImage(imageUrl);
-            }
-
-            await interaction.reply({ embeds: [embed], ephemeral: true });
-
-            const config = await loadConfig();
-            if (config.announcement_channel) {
-                try {
-                    const announcementChannel = await client.channels.fetch(config.announcement_channel);
-
-                    const announceEmbed = new EmbedBuilder()
-                        .setTitle('🆕 New Item for Sale!')
-                        .setDescription(`**${itemName}** is now available!`)
-                        .setColor(0x00FF00)
-                        .addFields(
-                            { name: '💰 Price', value: price, inline: true },
-                            { name: '📦 Stock', value: stock, inline: true },
-                            { name: '👤 Seller', value: `<@${interaction.user.id}>`, inline: true }
-                        )
-                        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 256 }))
-                        .setTimestamp();
-
-                    if (imageUrl && isValidUrl(imageUrl)) {
-                        announceEmbed.setImage(imageUrl);
-                    }
-
-                    const itemIndex = data.sell.length - 1;
-                    const buyButton = new ActionRowBuilder()
-                        .addComponents(
-                            new ButtonBuilder()
-                                .setCustomId(`contact_seller_${itemIndex}`)
-                                .setLabel('Contact Seller')
-                                .setStyle(ButtonStyle.Success)
-                                .setEmoji('📞')
-                        );
-
-                    await announcementChannel.send({ embeds: [announceEmbed], components: [buyButton] });
-                } catch (error) {
-                    console.error('Error posting announcement:', error);
+            try {
+                // Ensure sell array exists
+                if (!data.sell) {
+                    data.sell = [];
                 }
+
+                data.sell.push(listing);
+                await saveData(data);
+
+                const embed = new EmbedBuilder()
+                    .setTitle('✅ Item Listed for Sale!')
+                    .setColor(0x00FF00)
+                    .addFields(
+                        { name: 'Item', value: itemName, inline: false },
+                        { name: 'Price', value: price, inline: true },
+                        { name: 'Stock', value: stock, inline: true }
+                    );
+
+                if (imageUrl && isValidUrl(imageUrl)) {
+                    embed.setImage(imageUrl);
+                }
+
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+
+                const config = await loadConfig();
+                if (config && config.announcement_channel) {
+                    try {
+                        const announcementChannel = await client.channels.fetch(config.announcement_channel);
+
+                        const announceEmbed = new EmbedBuilder()
+                            .setTitle('🆕 New Item for Sale!')
+                            .setDescription(`**${itemName}** is now available!`)
+                            .setColor(0x00FF00)
+                            .addFields(
+                                { name: '💰 Price', value: price, inline: true },
+                                { name: '📦 Stock', value: stock, inline: true },
+                                { name: '👤 Seller', value: `<@${interaction.user.id}>`, inline: true }
+                            )
+                            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 256 }))
+                            .setTimestamp();
+
+                        if (imageUrl && isValidUrl(imageUrl)) {
+                            announceEmbed.setImage(imageUrl);
+                        }
+
+                        const itemIndex = data.sell.length - 1;
+                        const buyButton = new ActionRowBuilder()
+                            .addComponents(
+                                new ButtonBuilder()
+                                    .setCustomId(`contact_seller_${itemIndex}`)
+                                    .setLabel('Contact Seller')
+                                    .setStyle(ButtonStyle.Success)
+                                    .setEmoji('📞')
+                            );
+
+                        await announcementChannel.send({ embeds: [announceEmbed], components: [buyButton] });
+                    } catch (error) {
+                        console.error('Error posting announcement:', error);
+                    }
+                }
+            } catch (error) {
+                console.error('Error saving sell listing:', error);
+                return interaction.reply({ 
+                    content: '❌ Failed to save listing. Please try again!', 
+                    ephemeral: true 
+                });
             }
         }
 
@@ -1218,58 +1244,71 @@ client.on('interactionCreate', async (interaction) => {
                 image: imageUrl
             };
 
-            data.trade_offering.push(listing);
-            await saveData(data);
-
-            const embed = new EmbedBuilder()
-                .setTitle('✅ Trade Listing Created!')
-                .setColor(0x0099FF)
-                .addFields(
-                    { name: 'Trading', value: itemName, inline: false },
-                    { name: 'Looking For', value: want, inline: false }
-                );
-
-            if (imageUrl && isValidUrl(imageUrl)) {
-                embed.setImage(imageUrl);
-            }
-
-            await interaction.reply({ embeds: [embed], ephemeral: true });
-
-            const config = await loadConfig();
-            if (config.announcement_channel) {
-                try {
-                    const announcementChannel = await client.channels.fetch(config.announcement_channel);
-
-                    const announceEmbed = new EmbedBuilder()
-                        .setTitle('🔄 New Trade Offer!')
-                        .setDescription(`**${itemName}** is available for trade!`)
-                        .setColor(0x0099FF)
-                        .addFields(
-                            { name: '📦 Offering', value: itemName, inline: false },
-                            { name: '💭 Looking For', value: want, inline: false },
-                            { name: '👤 Trader', value: `<@${interaction.user.id}>`, inline: false }
-                        )
-                        .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 256 }))
-                        .setTimestamp();
-
-                    if (imageUrl && isValidUrl(imageUrl)) {
-                        announceEmbed.setImage(imageUrl);
-                    }
-
-                    const itemIndex = data.trade_offering.length - 1;
-                    const offerButton = new ActionRowBuilder()
-                        .addComponents(
-                            new ButtonBuilder()
-                                .setCustomId(`make_offer_${itemIndex}`)
-                                .setLabel('Make an Offer')
-                                .setStyle(ButtonStyle.Primary)
-                                .setEmoji('🤝')
-                        );
-
-                    await announcementChannel.send({ embeds: [announceEmbed], components: [offerButton] });
-                } catch (error) {
-                    console.error('Error posting announcement:', error);
+            try {
+                // Ensure trade_offering array exists
+                if (!data.trade_offering) {
+                    data.trade_offering = [];
                 }
+
+                data.trade_offering.push(listing);
+                await saveData(data);
+
+                const embed = new EmbedBuilder()
+                    .setTitle('✅ Trade Listing Created!')
+                    .setColor(0x0099FF)
+                    .addFields(
+                        { name: 'Trading', value: itemName, inline: false },
+                        { name: 'Looking For', value: want, inline: false }
+                    );
+
+                if (imageUrl && isValidUrl(imageUrl)) {
+                    embed.setImage(imageUrl);
+                }
+
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+
+                const config = await loadConfig();
+                if (config && config.announcement_channel) {
+                    try {
+                        const announcementChannel = await client.channels.fetch(config.announcement_channel);
+
+                        const announceEmbed = new EmbedBuilder()
+                            .setTitle('🔄 New Trade Offer!')
+                            .setDescription(`**${itemName}** is available for trade!`)
+                            .setColor(0x0099FF)
+                            .addFields(
+                                { name: '📦 Offering', value: itemName, inline: false },
+                                { name: '💭 Looking For', value: want, inline: false },
+                                { name: '👤 Trader', value: `<@${interaction.user.id}>`, inline: false }
+                            )
+                            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true, size: 256 }))
+                            .setTimestamp();
+
+                        if (imageUrl && isValidUrl(imageUrl)) {
+                            announceEmbed.setImage(imageUrl);
+                        }
+
+                        const itemIndex = data.trade_offering.length - 1;
+                        const offerButton = new ActionRowBuilder()
+                            .addComponents(
+                                new ButtonBuilder()
+                                    .setCustomId(`make_offer_${itemIndex}`)
+                                    .setLabel('Make an Offer')
+                                    .setStyle(ButtonStyle.Primary)
+                                    .setEmoji('🤝')
+                            );
+
+                        await announcementChannel.send({ embeds: [announceEmbed], components: [offerButton] });
+                    } catch (error) {
+                        console.error('Error posting announcement:', error);
+                    }
+                }
+            } catch (error) {
+                console.error('Error saving trade listing:', error);
+                return interaction.reply({ 
+                    content: '❌ Failed to save listing. Please try again!', 
+                    ephemeral: true 
+                });
             }
         }
     }
