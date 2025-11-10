@@ -97,10 +97,18 @@ async function saveConfig(config) {
 
 // Check if user is admin
 async function isAdmin(member) {
-    const config = await loadConfig();
-    return member.permissions.has(PermissionFlagsBits.Administrator) || 
-           config.admins?.includes(member.id) || 
-           member.id === OWNER_ID;
+    try {
+        const config = await loadConfig();
+        if (!config || !config.admins) {
+            return member.permissions.has(PermissionFlagsBits.Administrator) || member.id === OWNER_ID;
+        }
+        return member.permissions.has(PermissionFlagsBits.Administrator) || 
+               config.admins.includes(member.id) || 
+               member.id === OWNER_ID;
+    } catch (error) {
+        console.error('Error checking admin:', error);
+        return member.permissions.has(PermissionFlagsBits.Administrator) || member.id === OWNER_ID;
+    }
 }
 
 // Validate URL
@@ -282,6 +290,14 @@ function resetTicketTimer(channelId) {
 client.on('ready', () => {
     console.log(`${client.user.tag} is now online!`);
     console.log('JSONBin Status:', JSONBIN_API_KEY ? '✅ Configured' : '❌ Not configured (using local storage)');
+
+    // Initialize data files if they don't exist
+    if (!fs.existsSync('./listings.json')) {
+        fs.writeFileSync('./listings.json', JSON.stringify({ sell: [], trade_looking: [], trade_offering: [] }, null, 4));
+    }
+    if (!fs.existsSync('./config.json')) {
+        fs.writeFileSync('./config.json', JSON.stringify({ announcement_channel: null, shop_category: null, admins: [] }, null, 4));
+    }
 });
 
 client.on('messageCreate', async (message) => {
@@ -424,6 +440,10 @@ client.on('messageCreate', async (message) => {
 
         const config = await loadConfig();
 
+        if (!config.admins) {
+            config.admins = [];
+        }
+
         if (config.admins.includes(userId)) {
             return message.reply('❌ That user is already a bot admin!');
         }
@@ -448,6 +468,10 @@ client.on('messageCreate', async (message) => {
 
         const config = await loadConfig();
 
+        if (!config.admins) {
+            config.admins = [];
+        }
+
         if (!config.admins.includes(userId)) {
             return message.reply('❌ That user is not a bot admin!');
         }
@@ -465,7 +489,7 @@ client.on('messageCreate', async (message) => {
 
         const config = await loadConfig();
 
-        if (config.admins.length === 0) {
+        if (!config.admins || config.admins.length === 0) {
             return message.reply('📋 There are no bot admins set yet.');
         }
 
